@@ -156,6 +156,9 @@ def make_pdf(output, terminal_path, waveform_path):
             figure(hardware)
             add("Five trials per variant used the same guitar clip and the same ARM reference. "
                 "Medians shown per phase are computed independently.")
+            add("The four-tap image cut median end-to-end FPGA time from 48.056 ms to 17.035 ms "
+                "(2.82x). Its paired ARM median was 22.516 ms. The arithmetic stage saved "
+                "31.130 ms, while DDR and host copying costs stayed close to the serial values.")
     SimpleDocTemplate(str(output), title="DE10-Nano guitar FIR processing",
                       leftMargin=60, rightMargin=60).build(story)
 

@@ -19,6 +19,21 @@ cp fir128_test.c reference.h coeff.inc ../sw/fpga_irqs_off.c "$bundle/"
 for variant in serial parallel; do
     build="build/fir128-$variant"
     (cd "$build" && sha256sum -c firmware.sha256)
+    awk '
+        /^Type.* (Setup|Hold) .*FPGA_CLK1_50/ {
+            kind = ($0 ~ / Setup / ? "setup" : "hold")
+            if (getline != 1 || $1 != "Slack" || $3 !~ /^-?[0-9]+[.][0-9]+$/) {
+                invalid = 1
+                next
+            }
+            if (!(kind in minimum) || $3 + 0 < minimum[kind]) minimum[kind] = $3 + 0
+        }
+        END {
+            if (invalid || !("setup" in minimum) || !("hold" in minimum) ||
+                minimum["setup"] < 0 || minimum["hold"] < 0) exit 1
+            printf "50 MHz setup slack %.3f ns; hold slack %.3f ns\n", minimum["setup"], minimum["hold"]
+        }
+    ' "$build/output_files/DE10_NANO_SoC_GHRD.sta.summary" | tee "$output/$variant-timing.log"
     cp "$build/fir128.rbf" "$bundle/fir128-$variant.rbf"
     sed "s/fir128\.rbf/fir128-$variant.rbf/" fir128.dts > "$output/$variant.dts"
     dtc -@ -I dts -O dtb -o "$bundle/fir128-$variant.dtbo" "$output/$variant.dts"
@@ -108,5 +123,9 @@ if (( status != 0 || evidence_status != 0 )); then
     echo "See $output/session.log for the last completed step." >&2
     exit 1
 fi
-(cd "$output/evidence" && sha256sum -c outputs.sha256)
+(
+    cd "$output/evidence"
+    sha256sum -c outputs.sha256
+    for pcm in ./*.s16le; do cmp ./serial-1-arm.s16le "$pcm"; done
+)
 echo "FPGA profiling evidence saved in $output/evidence"
