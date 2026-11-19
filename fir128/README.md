@@ -211,3 +211,44 @@ The first live guitar-style run matched all 16,384 samples. The ARM took
 22.968 ms and the FPGA end-to-end path took 47.828 ms. See the
 [project report](../docs/guitar-fir-report.pdf) and
 [terminal output](../docs/guitar-fir-terminal.png).
+
+## Timing breakdown and parallel taps
+
+The instrumented runner reports ARM-side phases and reads the FPGA cycle counters
+after the timed comparison. The counters count mutually exclusive accelerator
+states at 50 MHz and reset for each accepted start. DDR read and write counts
+include command submission and response wait. The host IRQ interval contains
+the accelerator run and also includes register start and Linux wake-up.
+
+| Offset | FPGA profiling register |
+| --- | --- |
+| 0x24 | History clear cycles |
+| 0x28 | DDR read and wait cycles |
+| 0x30 | Multiply-accumulate and pipeline-drain cycles |
+| 0x34 | DDR write and wait cycles |
+| 0x38 | Sample load and output pack cycles |
+| 0x3c | Taps issued per arithmetic clock |
+
+Build the matched pair and test both RTL variants with the same reference output.
+
+```sh
+./build.sh fir128-serial
+./build.sh fir128-parallel
+./validate.sh build/guitar/input.s16le build/guitar/reference.s16le
+```
+
+The four-tap variant uses four signed multipliers and one pipeline-drain cycle
+per output. Both versions preserve the same PCM format, coefficients, rounding,
+and DDR protocol.
+
+From the stock FFT setup, review the stock preflight above and confirm both DDR
+ranges are free, external JTAG is disconnected, and downtime and reboot are
+acceptable. Run the matched comparison from the Ubuntu host.
+
+```sh
+./profile-board.sh "$TARGET" build/guitar/input.s16le
+```
+
+This runs five trials for each FPGA image, saves raw comparison results locally,
+and requests a reboot into the stock design. Keep the captured results and
+verify the stock overlay and FPGA LEDs after reconnecting.

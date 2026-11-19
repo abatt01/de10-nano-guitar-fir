@@ -24,5 +24,8 @@ for stem, filename in zip(('input', 'expected'), argv[1:]):
         raise SystemExit(f'{filename}: expected exactly 32768 bytes')
     Path(f'build/{stem}.hex').write_text(''.join(f'{sample:04x}\n' for (sample,) in iter_unpack('<H', pcm)))
 PY
-iverilog -g2012 -s fir128_tb -o build/fir128_tb ip/fir128/fir128.v fir128_tb.sv
-vvp build/fir128_tb
+for lanes in 1 4; do
+    iverilog -g2012 -s fir128_tb -P "fir128_tb.TAPS_PER_CLOCK=$lanes" \
+        -o build/fir128_tb ip/fir128/fir128.v fir128_tb.sv
+    vvp build/fir128_tb
+done

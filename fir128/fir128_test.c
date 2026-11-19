@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,7 +24,8 @@
 enum {
     REG_PIO_DATA, REG_PIO_DIR, REG_PIO_IRQMASK, REG_PIO_EDGECAP,
     REG_CTRL, REG_STATUS, REG_INPUT, REG_COUNT, REG_OUTPUT,
-    REG_UNUSED_9, REG_UNUSED_10, REG_ID
+    REG_CLEAR_CYCLES, REG_READ_CYCLES, REG_ID, REG_MAC_CYCLES,
+    REG_WRITE_CYCLES, REG_PACK_CYCLES, REG_TAPS_PER_CLOCK
 };
 
 static double now_ms(void)
@@ -100,6 +102,12 @@ static void finish_memory_writes(void)
 #else
     __sync_synchronize();
 #endif
+}
+
+static void print_cycles(const char *label, uint32_t cycles)
+{
+    printf("  %-25s %10" PRIu32 " cycles  %8.3f ms\n",
+           label, cycles, cycles / 50000.0);
 }
 
 static int save_pcm(const char *path, const int16_t *samples, size_t count)
@@ -219,6 +227,7 @@ int main(int argc, char **argv)
     for (size_t i = 0; i < FIR_SAMPLES; ++i)
         staging_input[i] = (uint16_t)input[i];
     finish_memory_writes();
+    double staged = now_ms();
     csr[REG_INPUT] = INPUT_PHYS;
     csr[REG_COUNT] = FIR_SAMPLES;
     csr[REG_OUTPUT] = OUTPUT_PHYS;
@@ -228,6 +237,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "FIR configuration readback failed\n");
         goto cleanup;
     }
+    double configured = now_ms();
     csr[REG_CTRL] = 1;
     struct pollfd event = { .fd = value_fd, .events = POLLPRI | POLLERR };
     int ready = poll(&event, 1, 5000);
@@ -238,10 +248,12 @@ int main(int argc, char **argv)
                 ready, (unsigned)event.revents, status, csr[REG_ID]);
         goto cleanup;
     }
+    double completed = now_ms();
     for (size_t i = 0; i < FIR_SAMPLES; ++i)
         fpga[i] = (int16_t)staging_output[i];
     finish_memory_writes();
-    double fpga_ms = now_ms() - start;
+    double copied = now_ms();
+    double fpga_ms = copied - start;
 
     for (size_t i = 0; i < FIR_SAMPLES; ++i) {
         if (cpu[i] != fpga[i]) {
@@ -255,6 +267,26 @@ int main(int argc, char **argv)
     printf("FPGA end-to-end            %.3f ms\n", fpga_ms);
     printf("CPU minus FPGA             %.3f ms\n", cpu_ms - fpga_ms);
     printf("CPU / FPGA                 %.3fx\n", cpu_ms / fpga_ms);
+    puts("Host FPGA-path timers:");
+    printf("  Stage input              %8.3f ms\n", staged - start);
+    printf("  Configure registers      %8.3f ms\n", configured - staged);
+    printf("  Start to IRQ and status  %8.3f ms\n", completed - configured);
+    printf("  Copy output              %8.3f ms\n", copied - completed);
+    uint32_t taps_per_clock = csr[REG_TAPS_PER_CLOCK];
+    if (taps_per_clock == 1 || taps_per_clock == 4) {
+        uint32_t clear = csr[REG_CLEAR_CYCLES];
+        uint32_t read = csr[REG_READ_CYCLES];
+        uint32_t mac = csr[REG_MAC_CYCLES];
+        uint32_t write = csr[REG_WRITE_CYCLES];
+        uint32_t pack = csr[REG_PACK_CYCLES];
+        printf("FPGA state counters at 50 MHz (%" PRIu32 " taps per clock):\n", taps_per_clock);
+        print_cycles("Clear history", clear);
+        print_cycles("DDR read and wait", read);
+        print_cycles("MAC and pipeline drain", mac);
+        print_cycles("Load and pack", pack);
+        print_cycles("DDR write and wait", write);
+        print_cycles("Accelerator total", clear + read + mac + pack + write);
+    }
     result = 0;
     if (argc == 4) {
         int arm_error = save_pcm(argv[2], cpu, FIR_SAMPLES);

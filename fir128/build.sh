@@ -6,13 +6,19 @@ vendor=${GHRD_DIR:-../cd/Demonstrations/SoC_FPGA/DE10_NANO_SoC_GHRD}
 image=${1:-fir128}
 case "$image" in
     fir128) build=$PWD/build; component=ip/fir128; overlay=fir128.dts ;;
+    fir128-serial|fir128-parallel)
+        build=$PWD/build/$image
+        image=fir128; component=ip/fir128; overlay=fir128.dts ;;
     array_sum) build=$PWD/build/array_sum; component=../ghrd/ip/array_sum; overlay=../sw/array_sum.dts ;;
-    *) echo 'Usage: build.sh [fir128|array_sum]' >&2; exit 2 ;;
+    *) echo 'Usage: build.sh [fir128|fir128-serial|fir128-parallel|array_sum]' >&2; exit 2 ;;
 esac
 mkdir -p "$build/ip/$image"
 cp "$vendor"/{DE10_NANO_SoC_GHRD.qpf,DE10_NANO_SoC_GHRD.qsf,DE10_NANO_SoC_GHRD.v,DE10_NANO_SOC_GHRD.sdc} "$build/"
 cp -r "$vendor"/ip/{altsource_probe,debounce,edge_detect} "$build/ip/"
 cp "$component"/* "$build/ip/$image/"
+if [[ ${1:-} == fir128-parallel ]]; then
+    sed -i 's/parameter TAPS_PER_CLOCK = 1/parameter TAPS_PER_CLOCK = 4/' "$build/ip/fir128/fir128.v"
+fi
 # Normalize the System CD's line endings before applying the 22.1 migration.
 tr -d '\r' < "$vendor/soc_system.qsys" > "$build/soc_system.qsys"
 patch --batch --forward --fuzz=0 "$build/soc_system.qsys" ghrd-22.1.patch

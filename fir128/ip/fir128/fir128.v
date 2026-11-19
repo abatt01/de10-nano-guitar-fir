@@ -1,4 +1,4 @@
-module fir128 (
+module fir128 #(parameter TAPS_PER_CLOCK = 1) (
     input wire clk, reset,
     input wire [3:0] avs_address,
     input wire avs_read, avs_write,
@@ -15,7 +15,9 @@ module fir128 (
     output wire irq
 );
     localparam [3:0] IDLE=0, CLEAR=1, READ=2, READ_WAIT=3,
-                     LOAD=4, MAC=5, PACK=6, WRITE=7, WRITE_WAIT=8;
+                     LOAD=4, MAC=5, PACK=6, WRITE=7, WRITE_WAIT=8, MAC_DRAIN=9;
+    localparam [6:0] TAP_STEP = TAPS_PER_CLOCK;
+    localparam [6:0] LAST_TAP = 128 - TAPS_PER_CLOCK;
     localparam [31:0] INPUT_BASE=32'h3f800000, OUTPUT_BASE=32'h3fc00000;
     localparam [31:0] SAMPLE_COUNT=16384, ID_VALUE=32'h46495231;
 
@@ -29,8 +31,39 @@ module fir128 (
     reg signed [15:0] coefficients [0:127];
     reg signed [15:0] history [0:127];
     reg signed [47:0] sum;
-    wire [6:0] history_address = head - tap;
-    wire signed [31:0] product = history[history_address] * coefficients[tap];
+    reg [31:0] clear_cycles, read_cycles, mac_cycles, write_cycles, pack_cycles;
+    wire signed [47:0] mac_addend;
+    generate
+        if (TAPS_PER_CLOCK == 1) begin : serial_mac
+            wire [6:0] history_address = head - tap;
+            wire signed [31:0] product = history[history_address] * coefficients[tap];
+            assign mac_addend = {{16{product[31]}}, product};
+        end else begin : parallel_mac
+            wire signed [31:0] products [0:3];
+            reg signed [31:0] product_regs [0:3];
+            genvar index;
+            for (index = 0; index < 4; index = index + 1) begin : channels
+                wire [6:0] tap_index = tap + index;
+                wire [6:0] history_address = head - tap_index;
+                assign products[index] = history[history_address] * coefficients[tap_index];
+                always @(posedge clk) begin
+                    if (state == LOAD)
+                        product_regs[index] <= 0;
+                    else if (state == MAC)
+                        product_regs[index] <= products[index];
+                end
+            end
+            // Extend before summing so four full-scale signed products cannot overflow.
+            wire signed [33:0] pair_a =
+                $signed({{2{product_regs[0][31]}}, product_regs[0]}) +
+                $signed({{2{product_regs[1][31]}}, product_regs[1]});
+            wire signed [33:0] pair_b =
+                $signed({{2{product_regs[2][31]}}, product_regs[2]}) +
+                $signed({{2{product_regs[3][31]}}, product_regs[3]});
+            wire signed [33:0] group_sum = pair_a + pair_b;
+            assign mac_addend = {{14{group_sum[33]}}, group_sum};
+        end
+    endgenerate
     wire busy = state != IDLE;
     wire valid_config = input_base == INPUT_BASE &&
                         output_base == OUTPUT_BASE && count == SAMPLE_COUNT;
@@ -57,6 +90,28 @@ module fir128 (
     assign avm_writedata = output_word;
     assign avm_burstcount = 5'd1;
 
+    wire start = state == IDLE && avs_write && avs_address == 4'd4 && avs_writedata[0];
+
+    // Count all busy clocks by state, including cycles waiting for a bus response.
+    always @(posedge clk) begin
+        if (reset || start) begin
+            clear_cycles <= 0;
+            read_cycles <= 0;
+            mac_cycles <= 0;
+            write_cycles <= 0;
+            pack_cycles <= 0;
+        end else begin
+            case (state)
+                CLEAR: clear_cycles <= clear_cycles + 1'b1;
+                READ, READ_WAIT: read_cycles <= read_cycles + 1'b1;
+                MAC, MAC_DRAIN: mac_cycles <= mac_cycles + 1'b1;
+                WRITE, WRITE_WAIT: write_cycles <= write_cycles + 1'b1;
+                LOAD, PACK: pack_cycles <= pack_cycles + 1'b1;
+                default: ;
+            endcase
+        end
+    end
+
     always @(posedge clk) begin
         if (reset) begin
             state <= IDLE;
@@ -79,7 +134,7 @@ module fir128 (
                 endcase
             end
             case (state)
-                IDLE: if (avs_write && avs_address == 4'd4 && avs_writedata[0]) begin
+                IDLE: if (start) begin
                     done <= 0;
                     fault <= !valid_config;
                     edge_cap <= !valid_config;
@@ -117,9 +172,14 @@ module fir128 (
                     state <= MAC;
                 end
                 MAC: begin
-                    sum <= sum + {{16{product[31]}}, product};
-                    tap <= tap + 1'b1;
-                    if (tap == 127) state <= PACK;
+                    sum <= sum + mac_addend;
+                    tap <= tap + TAP_STEP;
+                    if (tap == LAST_TAP)
+                        state <= TAPS_PER_CLOCK == 1 ? PACK : MAC_DRAIN;
+                end
+                MAC_DRAIN: begin
+                    sum <= sum + mac_addend;
+                    state <= PACK;
                 end
                 PACK: begin
                     output_word <= {quantize(sum), output_word[63:16]};
@@ -156,7 +216,13 @@ module fir128 (
             4'd6: avs_readdata = input_base;
             4'd7: avs_readdata = count;
             4'd8: avs_readdata = output_base;
+            4'd9: avs_readdata = clear_cycles;
+            4'd10: avs_readdata = read_cycles;
             4'd11: avs_readdata = ID_VALUE;
+            4'd12: avs_readdata = mac_cycles;
+            4'd13: avs_readdata = write_cycles;
+            4'd14: avs_readdata = pack_cycles;
+            4'd15: avs_readdata = TAPS_PER_CLOCK;
             default: avs_readdata = 0;
         endcase
     end

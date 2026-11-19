@@ -137,6 +137,25 @@ def make_pdf(output, terminal_path, waveform_path):
     add('See <link href="https://github.com/abatt01/de10-nano-guitar-fir/blob/main/fir128/README.md" '
         'color="#0c685c">the run guide</link> for fixture generation, host and RTL validation, '
         "Quartus build, board preflight, deployment, rollback, and guitar WAV conversion.")
+    profiling = DOCS / "fir-profiling-rtl.png"
+    if profiling.is_file():
+        story.append(PageBreak())
+        add("FPGA timing breakdown", "Title")
+        add("The instrumented runner measures host staging, register setup, IRQ and status, "
+            "and output copy. FPGA counters measure history clear, DDR reads and writes, "
+            "sample load and packing, and tap arithmetic. DDR counts include cycles spent "
+            "waiting for command acceptance or a response.")
+        add("Simulated accelerator cycles", "Heading2")
+        figure(profiling)
+        add("The four-tap pipeline issues 32 groups per output, then drains the final group "
+            "in one extra clock. Modelled DDR timing depends on the imposed testbench stalls.")
+        hardware = DOCS / "fir-profiling-board.png"
+        if hardware.is_file():
+            story.append(PageBreak())
+            add("Live profiling results", "Title")
+            figure(hardware)
+            add("Five trials per variant used the same guitar clip and the same ARM reference. "
+                "Medians shown per phase are computed independently.")
     SimpleDocTemplate(str(output), title="DE10-Nano guitar FIR processing",
                       leftMargin=60, rightMargin=60).build(story)
 
