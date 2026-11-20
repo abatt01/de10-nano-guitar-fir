@@ -43,3 +43,11 @@ output copy.
 A physical-board comparison requires working board access. The VM detected the
 USB gadget, but the board did not respond to USB Ethernet address resolution at
 the existing SSH address, even with a temporary host-side IPv4 address.
+
+## Quartus implementation
+
+The buffered firmware compiled and passed the 50 MHz FPGA clock timing checks.
+The minimum setup and hold slacks were +4.066 ns and +0.121 ns. The fitted
+design used 12,744 of 41,910 ALMs, 8 of 112 DSP blocks, and 6 of 553 RAM
+blocks. The generated firmware and overlay passed checksum verification.
+The buffered firmware was not loaded because USB Ethernet remained unreachable.
