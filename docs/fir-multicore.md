@@ -42,3 +42,38 @@ The wider variants also passed a separate RTL stress run with full-scale and
 random signed PCM values. The ARM split was checked on that input as well.
 
 [Stock-image ARM trial log](arm-dual-board.txt)
+
+## Paired measurements on the DE10-Nano
+
+The four-, eight-, and sixteen-tap FPGA images each ran five trials during the
+same board session as 15 pinned ARM trials. All trials agreed bit-for-bit on
+all 16,384 outputs. Each FPGA timing includes host input staging, FPGA work,
+the completion interrupt, and copying the result out.
+
+| Implementation | Median elapsed time | FPGA arithmetic | Whole-design ALMs | DSP blocks |
+| --- | ---: | ---: | ---: | ---: |
+| ARM, one core | 22.829 ms | — | — | — |
+| ARM, two cores | 11.459 ms | — | — | — |
+| FPGA, four taps per clock | 16.943 ms | 10.813 ms | 6,657 of 41,910 | 4 of 112 |
+| FPGA, eight taps per clock | 12.050 ms | 5.898 ms | 8,601 of 41,910 | 4 of 112 |
+| FPGA, sixteen taps per clock | **9.376 ms** | **3.277 ms** | 12,696 of 41,910 | 8 of 112 |
+
+The dual-core C reference is **1.99× as fast** as the single-core reference.
+The eight-tap FPGA took 0.591 ms longer than dual-core ARM. The sixteen-tap
+FPGA saved 2.083 ms relative to dual-core ARM, a **1.22× speedup**. All FPGA
+variants used six RAM blocks and met the 50 MHz timing constraint. Worst
+setup/hold slack was +2.894/+0.125 ns (four), +4.445/+0.123 ns (eight),
+and +3.825/+0.129 ns (sixteen).
+
+With sixteen taps per clock, roughly 6.10 ms of the end-to-end run is outside
+tap arithmetic. Host input staging and output copy account for about 3.17 ms,
+and FPGA DDR reads and writes, including waits, account for about 2.16 ms.
+The table compares this dual-core C implementation with the FPGA on one fixed
+clip. The dual-core implementation uses the same direct FIR arithmetic as the
+single-core baseline, and the FPGA variants above four taps exploit symmetry.
+
+![Paired board timings](fir-multicore-board.png)
+
+[ARM trial capture](arm-dual-board.png) · [All board trials](fir-multicore-board-trials.txt)
+
+Stock recovery was verified after reboot. The stock overlay was applied, the FPGA manager was operating, and all eight stock FPGA LEDs were present.

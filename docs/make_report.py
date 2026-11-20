@@ -159,6 +159,18 @@ def make_pdf(output, terminal_path, waveform_path):
             add("The four-tap image cut median end-to-end FPGA time from 48.056 ms to 17.035 ms "
                 "(2.82x). Its paired ARM median was 22.516 ms. The arithmetic stage saved "
                 "31.130 ms, while DDR and host copying costs stayed close to the serial values.")
+    multicore = DOCS / "fir-multicore-board.png"
+    if multicore.is_file():
+        story.append(PageBreak())
+        add("Dual-core ARM versus wider FPGA", "Title")
+        add("The same 128-tap filter and 16,384-sample clip were used for all runs. "
+            "The ARM workers ran on separate cores and carried the input history across "
+            "the split. Their timer includes dispatch and synchronization. The paired "
+            "FPGA timings include staging, the interrupt wait, and result copy-back.")
+        figure(multicore)
+        add("Eight and sixteen effective taps per clock use four and eight multipliers, "
+            "respectively. Each uses a signed 17-bit sum of mirrored history samples. "
+            "Both pipeline stages drain before the final sample is rounded.")
     SimpleDocTemplate(str(output), title="DE10-Nano guitar FIR processing",
                       leftMargin=60, rightMargin=60).build(story)
 

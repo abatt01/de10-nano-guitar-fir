@@ -1,0 +1,337 @@
+Main CPU 0, worker CPU 1
+Trial  1  single   33.739 ms  dual   11.745 ms
+Trial  2  single   23.005 ms  dual   11.443 ms
+Trial  3  single   22.994 ms  dual   11.441 ms
+Trial  4  single   22.791 ms  dual   11.444 ms
+Trial  5  single   22.823 ms  dual   11.461 ms
+Trial  6  single   22.795 ms  dual   11.419 ms
+Trial  7  single   22.827 ms  dual   11.566 ms
+Trial  8  single   22.829 ms  dual   11.447 ms
+Trial  9  single   22.805 ms  dual   11.553 ms
+Trial 10  single   22.966 ms  dual   11.476 ms
+Trial 11  single   22.813 ms  dual   11.542 ms
+Trial 12  single   22.837 ms  dual   11.470 ms
+Trial 13  single   22.939 ms  dual   11.431 ms
+Trial 14  single   22.802 ms  dual   11.417 ms
+Trial 15  single   22.899 ms  dual   11.459 ms
+MATCH all 16384 samples in all 15 trials
+Single-core median 22.829 ms
+Dual-core median   11.459 ms
+ARM speedup        1.992x
+
+parallel trial 1
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    22.832 ms
+FPGA end-to-end            16.950 ms
+CPU minus FPGA             5.882 ms
+CPU / FPGA                 1.347x
+Host FPGA-path timers:
+  Stage input                 1.070 ms
+  Configure registers         0.003 ms
+  Start to IRQ and status    13.779 ms
+  Copy output                 2.098 ms
+FPGA state counters at 50 MHz (4 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              67364 cycles     1.347 ms
+  MAC and pipeline drain        540672 cycles    10.813 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45056 cycles     0.901 ms
+  Accelerator total             685988 cycles    13.720 ms
+
+parallel trial 2
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    22.783 ms
+FPGA end-to-end            16.943 ms
+CPU minus FPGA             5.839 ms
+CPU / FPGA                 1.345x
+Host FPGA-path timers:
+  Stage input                 1.069 ms
+  Configure registers         0.003 ms
+  Start to IRQ and status    13.772 ms
+  Copy output                 2.099 ms
+FPGA state counters at 50 MHz (4 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              67347 cycles     1.347 ms
+  MAC and pipeline drain        540672 cycles    10.813 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45057 cycles     0.901 ms
+  Accelerator total             685972 cycles    13.719 ms
+
+parallel trial 3
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    22.509 ms
+FPGA end-to-end            16.952 ms
+CPU minus FPGA             5.557 ms
+CPU / FPGA                 1.328x
+Host FPGA-path timers:
+  Stage input                 1.069 ms
+  Configure registers         0.003 ms
+  Start to IRQ and status    13.774 ms
+  Copy output                 2.106 ms
+FPGA state counters at 50 MHz (4 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              67340 cycles     1.347 ms
+  MAC and pipeline drain        540672 cycles    10.813 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45056 cycles     0.901 ms
+  Accelerator total             685964 cycles    13.719 ms
+
+parallel trial 4
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    22.355 ms
+FPGA end-to-end            16.939 ms
+CPU minus FPGA             5.415 ms
+CPU / FPGA                 1.320x
+Host FPGA-path timers:
+  Stage input                 1.066 ms
+  Configure registers         0.003 ms
+  Start to IRQ and status    13.773 ms
+  Copy output                 2.098 ms
+FPGA state counters at 50 MHz (4 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              67375 cycles     1.347 ms
+  MAC and pipeline drain        540672 cycles    10.813 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45056 cycles     0.901 ms
+  Accelerator total             685999 cycles    13.720 ms
+
+parallel trial 5
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    22.470 ms
+FPGA end-to-end            16.939 ms
+CPU minus FPGA             5.531 ms
+CPU / FPGA                 1.327x
+Host FPGA-path timers:
+  Stage input                 1.067 ms
+  Configure registers         0.003 ms
+  Start to IRQ and status    13.773 ms
+  Copy output                 2.096 ms
+FPGA state counters at 50 MHz (4 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              67363 cycles     1.347 ms
+  MAC and pipeline drain        540672 cycles    10.813 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45056 cycles     0.901 ms
+  Accelerator total             685987 cycles    13.720 ms
+
+symmetric trial 1
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    24.187 ms
+FPGA end-to-end            11.958 ms
+CPU minus FPGA             12.229 ms
+CPU / FPGA                 2.023x
+Host FPGA-path timers:
+  Stage input                 1.068 ms
+  Configure registers         0.003 ms
+  Start to IRQ and status     8.779 ms
+  Copy output                 2.109 ms
+FPGA state counters at 50 MHz (8 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              63263 cycles     1.265 ms
+  MAC and pipeline drain        294912 cycles     5.898 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45056 cycles     0.901 ms
+  Accelerator total             436127 cycles     8.723 ms
+
+symmetric trial 2
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    22.407 ms
+FPGA end-to-end            12.050 ms
+CPU minus FPGA             10.357 ms
+CPU / FPGA                 1.860x
+Host FPGA-path timers:
+  Stage input                 1.066 ms
+  Configure registers         0.003 ms
+  Start to IRQ and status     8.777 ms
+  Copy output                 2.204 ms
+FPGA state counters at 50 MHz (8 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              63295 cycles     1.266 ms
+  MAC and pipeline drain        294912 cycles     5.898 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45057 cycles     0.901 ms
+  Accelerator total             436160 cycles     8.723 ms
+
+symmetric trial 3
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    22.529 ms
+FPGA end-to-end            12.137 ms
+CPU minus FPGA             10.391 ms
+CPU / FPGA                 1.856x
+Host FPGA-path timers:
+  Stage input                 1.128 ms
+  Configure registers         0.004 ms
+  Start to IRQ and status     8.774 ms
+  Copy output                 2.232 ms
+FPGA state counters at 50 MHz (8 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              63251 cycles     1.265 ms
+  MAC and pipeline drain        294912 cycles     5.898 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45056 cycles     0.901 ms
+  Accelerator total             436115 cycles     8.722 ms
+
+symmetric trial 4
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    22.453 ms
+FPGA end-to-end            12.050 ms
+CPU minus FPGA             10.403 ms
+CPU / FPGA                 1.863x
+Host FPGA-path timers:
+  Stage input                 1.068 ms
+  Configure registers         0.003 ms
+  Start to IRQ and status     8.773 ms
+  Copy output                 2.206 ms
+FPGA state counters at 50 MHz (8 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              63319 cycles     1.266 ms
+  MAC and pipeline drain        294912 cycles     5.898 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45056 cycles     0.901 ms
+  Accelerator total             436183 cycles     8.724 ms
+
+symmetric trial 5
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    22.724 ms
+FPGA end-to-end            14.700 ms
+CPU minus FPGA             8.024 ms
+CPU / FPGA                 1.546x
+Host FPGA-path timers:
+  Stage input                 3.823 ms
+  Configure registers         0.005 ms
+  Start to IRQ and status     8.771 ms
+  Copy output                 2.102 ms
+FPGA state counters at 50 MHz (8 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              63305 cycles     1.266 ms
+  MAC and pipeline drain        294912 cycles     5.898 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45056 cycles     0.901 ms
+  Accelerator total             436169 cycles     8.723 ms
+
+wide trial 1
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    23.843 ms
+FPGA end-to-end            9.376 ms
+CPU minus FPGA             14.467 ms
+CPU / FPGA                 2.543x
+Host FPGA-path timers:
+  Stage input                 1.067 ms
+  Configure registers         0.003 ms
+  Start to IRQ and status     6.149 ms
+  Copy output                 2.157 ms
+FPGA state counters at 50 MHz (16 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              63056 cycles     1.261 ms
+  MAC and pipeline drain        163840 cycles     3.277 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45057 cycles     0.901 ms
+  Accelerator total             304849 cycles     6.097 ms
+
+wide trial 2
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    22.787 ms
+FPGA end-to-end            9.397 ms
+CPU minus FPGA             13.389 ms
+CPU / FPGA                 2.425x
+Host FPGA-path timers:
+  Stage input                 1.146 ms
+  Configure registers         0.003 ms
+  Start to IRQ and status     6.152 ms
+  Copy output                 2.096 ms
+FPGA state counters at 50 MHz (16 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              63078 cycles     1.262 ms
+  MAC and pipeline drain        163840 cycles     3.277 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45056 cycles     0.901 ms
+  Accelerator total             304870 cycles     6.097 ms
+
+wide trial 3
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    22.470 ms
+FPGA end-to-end            9.324 ms
+CPU minus FPGA             13.146 ms
+CPU / FPGA                 2.410x
+Host FPGA-path timers:
+  Stage input                 1.068 ms
+  Configure registers         0.003 ms
+  Start to IRQ and status     6.150 ms
+  Copy output                 2.103 ms
+FPGA state counters at 50 MHz (16 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              63162 cycles     1.263 ms
+  MAC and pipeline drain        163840 cycles     3.277 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45057 cycles     0.901 ms
+  Accelerator total             304955 cycles     6.099 ms
+
+wide trial 4
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    22.469 ms
+FPGA end-to-end            9.320 ms
+CPU minus FPGA             13.150 ms
+CPU / FPGA                 2.411x
+Host FPGA-path timers:
+  Stage input                 1.069 ms
+  Configure registers         0.003 ms
+  Start to IRQ and status     6.152 ms
+  Copy output                 2.096 ms
+FPGA state counters at 50 MHz (16 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              63078 cycles     1.262 ms
+  MAC and pipeline drain        163840 cycles     3.277 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45056 cycles     0.901 ms
+  Accelerator total             304870 cycles     6.097 ms
+
+wide trial 5
+MATCH (16384 samples, one on-board timing pair)
+ARM CPU                    22.736 ms
+FPGA end-to-end            9.430 ms
+CPU minus FPGA             13.306 ms
+CPU / FPGA                 2.411x
+Host FPGA-path timers:
+  Stage input                 1.068 ms
+  Configure registers         0.003 ms
+  Start to IRQ and status     6.155 ms
+  Copy output                 2.204 ms
+FPGA state counters at 50 MHz (16 taps per clock):
+  Clear history                    128 cycles     0.003 ms
+  DDR read and wait              63061 cycles     1.261 ms
+  MAC and pipeline drain        163840 cycles     3.277 ms
+  Load and pack                  32768 cycles     0.655 ms
+  DDR write and wait             45057 cycles     0.901 ms
+  Accelerator total             304854 cycles     6.097 ms
+
+SHA-256 for all retrieved outputs
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./parallel-1-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./parallel-1-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./parallel-2-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./parallel-2-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./parallel-3-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./parallel-3-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./parallel-4-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./parallel-4-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./parallel-5-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./parallel-5-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./symmetric-1-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./symmetric-1-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./symmetric-2-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./symmetric-2-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./symmetric-3-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./symmetric-3-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./symmetric-4-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./symmetric-4-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./symmetric-5-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./symmetric-5-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./wide-1-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./wide-1-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./wide-2-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./wide-2-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./wide-3-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./wide-3-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./wide-4-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./wide-4-fpga.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./wide-5-arm.s16le
+4723a2c8b2c795fcb2afc41308febe096c53937f9a778e1174c1f3698356786d  ./wide-5-fpga.s16le
