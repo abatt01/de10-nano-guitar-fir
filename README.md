@@ -20,3 +20,5 @@ generated guitar-style clip. The ARM took **22.968 ms** and the FPGA path took
 [Raw timing log](docs/guitar-fir-live.txt)
 
 [FPGA profiling and four-tap results](docs/fir-profiling.md)
+
+[Dual-core ARM and wider FPGA benchmarks](docs/fir-multicore.md)

@@ -137,7 +137,7 @@ module fir128_tb #(parameter TAPS_PER_CLOCK = 1);
         read_csr(14, pack_count);
         read_csr(15, lanes);
         if (lanes != TAPS_PER_CLOCK || clear_count != 128 ||
-            mac_count != 16384 * (128 / TAPS_PER_CLOCK + (TAPS_PER_CLOCK == 4 ? 1 : 0)) ||
+            mac_count != 16384 * (128 / TAPS_PER_CLOCK + (TAPS_PER_CLOCK >= 8 ? 2 : TAPS_PER_CLOCK == 4 ? 1 : 0)) ||
             pack_count != 32768 || read_count != read_clocks || write_count != write_clocks ||
             clear_count + read_count + mac_count + write_count + pack_count != elapsed)
             $fatal(1, "Counters do not match bus and job observations");

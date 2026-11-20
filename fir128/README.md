@@ -252,3 +252,24 @@ acceptable. Run the matched comparison from the Ubuntu host.
 This runs five trials for each FPGA image, saves raw comparison results locally,
 and requests a reboot into the stock design. Keep the captured results and
 verify the stock overlay and FPGA LEDs after reconnecting.
+
+## Two ARM cores and symmetric FPGA taps
+
+Build the ARM benchmark with `gcc -std=c11 -O2 -Wall -Wextra -Werror -pthread
+arm_bench.c -o arm_bench`. Copy the source, header, coefficients, and input to
+the board if building there. Run `./arm_bench input.s16le` on a Linux target
+with two available CPU cores.
+
+For the paired board benchmark, first build the four-, eight-, and sixteen-tap
+FPGA images. The eight- and sixteen-tap modes require mirrored coefficients.
+
+```sh
+./build.sh fir128-parallel
+./build.sh fir128-symmetric
+./build.sh fir128-wide
+./profile-board.sh "$TARGET" build/guitar/input.s16le symmetric
+```
+
+The paired run measures the pinned dual-core ARM implementation, then five
+trials for each FPGA image. It keeps and checks the PCM outputs, saves all
+timing logs, and requests a reboot to restore the stock image.

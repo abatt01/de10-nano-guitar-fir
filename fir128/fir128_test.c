@@ -273,7 +273,7 @@ int main(int argc, char **argv)
     printf("  Start to IRQ and status  %8.3f ms\n", completed - configured);
     printf("  Copy output              %8.3f ms\n", copied - completed);
     uint32_t taps_per_clock = csr[REG_TAPS_PER_CLOCK];
-    if (taps_per_clock == 1 || taps_per_clock == 4) {
+    if (taps_per_clock == 1 || taps_per_clock == 4 || taps_per_clock == 8 || taps_per_clock == 16) {
         uint32_t clear = csr[REG_CLEAR_CYCLES];
         uint32_t read = csr[REG_READ_CYCLES];
         uint32_t mac = csr[REG_MAC_CYCLES];

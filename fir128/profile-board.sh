@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # Run from the host after checking the stock FFT baseline and disconnecting JTAG.
 set -euo pipefail
-if [[ $# != 2 ]]; then
-    echo 'Usage: profile-board.sh user@board input.s16le' >&2
+if (( $# < 2 || $# > 3 )); then
+    echo 'Usage: profile-board.sh user@board input.s16le [symmetric]' >&2
     exit 2
 fi
+case "${3:-}" in
+    '') variants=(serial parallel) ;;
+    symmetric) variants=(parallel symmetric wide) ;;
+    *) echo 'Unknown comparison mode' >&2; exit 2 ;;
+esac
 target=$1
 input=$(realpath "$2")
 cd "$(dirname "$0")"
@@ -15,8 +20,8 @@ mkdir "$bundle"
 echo "Local evidence directory: $output"
 test "$(wc -c < "$input")" -eq 32768
 cp "$input" "$bundle/input.s16le"
-cp fir128_test.c reference.h coeff.inc ../sw/fpga_irqs_off.c "$bundle/"
-for variant in serial parallel; do
+cp fir128_test.c arm_bench.c reference.h coeff.inc ../sw/fpga_irqs_off.c "$bundle/"
+for variant in "${variants[@]}"; do
     build="build/fir128-$variant"
     (cd "$build" && sha256sum -c firmware.sha256)
     awk '
@@ -47,7 +52,7 @@ stage=$(ssh "${ssh_options[@]}" "$target" 'mktemp -d /tmp/fir128-profile.XXXXXX'
 tar -C "$bundle" -cf - . | ssh "${ssh_options[@]}" "$target" "cd '$stage' && tar -xf -"
 
 status=0
-ssh "${ssh_options[@]}" "$target" "cd '$stage' && sh -s" <<'BOARD' 2>&1 | tee "$output/session.log" || status=$?
+ssh "${ssh_options[@]}" "$target" "cd '$stage' && sh -s -- ${variants[*]}" <<'BOARD' 2>&1 | tee "$output/session.log" || status=$?
 set -eu
 mkdir evidence
 ov=/sys/kernel/config/device-tree/overlays
@@ -63,6 +68,9 @@ sha256sum /media/FAT/de10-nano.rbf /lib/firmware/de10-nano.dtbo > evidence/stock
 cat /proc/sys/kernel/random/boot_id > evidence/boot-before
 sha256sum -c payload.sha256
 gcc -O2 -Wall -Wextra -Werror -std=c11 fir128_test.c -o fir128_test
+if [ "$#" -eq 3 ]; then
+    gcc -O2 -Wall -Wextra -Werror -std=c11 -pthread arm_bench.c -o arm_bench
+fi
 gcc -O2 -Wall -Wextra -D_FILE_OFFSET_BITS=64 fpga_irqs_off.c -o fpga_irqs_off
 for artifact in ./*.rbf ./*.dtbo; do
     test ! -e "/lib/firmware/${artifact#./}"
@@ -82,9 +90,16 @@ for driver in leds-gpio gpio-keys; do
 done
 rmdir "$ov/de10-nano.dtbo"
 ./fpga_irqs_off
+if [ "$#" -eq 3 ]; then
+    if ! ./arm_bench input.s16le > evidence/arm-bench.log 2>&1; then
+        cat evidence/arm-bench.log
+        exit 1
+    fi
+    cat evidence/arm-bench.log
+fi
 
-for variant in serial parallel; do
-    case "$variant" in serial) lanes=1 ;; parallel) lanes=4 ;; esac
+for variant in "$@"; do
+    case "$variant" in serial) lanes=1 ;; parallel) lanes=4 ;; symmetric) lanes=8 ;; wide) lanes=16 ;; esac
     slot="fir128-$variant"
     mkdir "$ov/$slot"
     printf '%s' "$slot.dtbo" > "$ov/$slot/path"
@@ -126,6 +141,6 @@ fi
 (
     cd "$output/evidence"
     sha256sum -c outputs.sha256
-    for pcm in ./*.s16le; do cmp ./serial-1-arm.s16le "$pcm"; done
+    for pcm in ./*.s16le; do cmp "./${variants[0]}-1-arm.s16le" "$pcm"; done
 )
 echo "FPGA profiling evidence saved in $output/evidence"

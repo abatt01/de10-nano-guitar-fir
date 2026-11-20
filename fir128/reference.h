@@ -16,15 +16,18 @@ static int16_t fir_quantize(int64_t sum)
     return (int16_t)rounded;
 }
 
-static void fir_reference(const int16_t *input, int16_t *output, size_t count)
+static void fir_range(const int16_t *input, int16_t *output, size_t begin, size_t end)
 {
     static const int16_t coefficients[FIR_TAPS] = {
 #include "coeff.inc"
     };
     int16_t history[FIR_TAPS] = {0};
-    unsigned head = 0;
+    unsigned head = begin & (FIR_TAPS - 1);
+    size_t previous = begin < FIR_TAPS - 1 ? 0 : begin - (FIR_TAPS - 1);
+    for (; previous < begin; ++previous)
+        history[previous & (FIR_TAPS - 1)] = input[previous];
 
-    for (size_t i = 0; i < count; ++i) {
+    for (size_t i = begin; i < end; ++i) {
         history[head] = input[i];
         int64_t sum = 0;
         for (unsigned tap = 0; tap < FIR_TAPS; ++tap)
@@ -32,4 +35,10 @@ static void fir_reference(const int16_t *input, int16_t *output, size_t count)
         output[i] = fir_quantize(sum);
         head = (head + 1) & (FIR_TAPS - 1);
     }
+}
+
+
+static void fir_reference(const int16_t *input, int16_t *output, size_t count)
+{
+    fir_range(input, output, 0, count);
 }

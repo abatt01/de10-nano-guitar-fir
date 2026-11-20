@@ -23,10 +23,11 @@ def rows_from(text, rows, pattern):
             for row in rows}
 
 
-def simulation(path):
+def simulation(path, variants):
     blocks = path.read_text().split("RTL PASS:")[1:]
-    if len(blocks) != 2:
-        raise ValueError("both passing RTL profiles are required")
+    by_lanes = {int(re.search(r"Taps per clock\s+(\d+)", block).group(1)): block
+                for block in blocks}
+    blocks = [by_lanes[lanes] for lanes in variants]
     rows = list(CYCLE_ROWS)
     rows[2] = "MAC and drain"
     return [{name: value for name, value in zip(
@@ -34,9 +35,9 @@ def simulation(path):
         for block in blocks]
 
 
-def board(path):
+def board(path, variants):
     results = []
-    for variant in ("serial", "parallel"):
+    for variant in variants:
         trials = sorted(path.glob(f"{variant}-[1-5].log"))
         if len(trials) != 5:
             raise ValueError(f"five {variant} logs are required")
@@ -64,35 +65,48 @@ def capture(title, lines, filename):
     image.save(DOCS / filename, optimize=True)
 
 
-def format_result(rows, results, factor, suffix):
-    return [
-        f"{'Stage':<26} {'1 tap/clock':>17} {'4 taps/clock':>17}",
-        *[f"{row:<26} {results[0][row] / factor:>12.3f} {suffix} "
-          f"{results[1][row] / factor:>13.3f} {suffix}" for row in rows],
-    ]
+def format_result(rows, results, factor, suffix, lanes):
+    header = f"{'Stage':<26}" + "".join(f"{str(n) + ' taps/clock':>17}" for n in lanes)
+    return [header, *[
+        f"{row:<26}" + "".join(f"{data[row] / factor:>13.3f} {suffix}" for data in results)
+        for row in rows
+    ]]
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("simulation_log", type=Path)
     parser.add_argument("--evidence", type=Path)
+    parser.add_argument("--multicore", action="store_true")
     args = parser.parse_args()
-    sim = simulation(args.simulation_log)
-    gain = sim[0]["Accelerator total"] / sim[1]["Accelerator total"]
+    lanes = (4, 8, 16) if args.multicore else (1, 4)
+    variants = ("parallel", "symmetric", "wide") if args.multicore else ("serial", "parallel")
+    prefix = "fir-multicore" if args.multicore else "fir-profiling"
+    sim = simulation(args.simulation_log, lanes)
+    gain = sim[0]["Accelerator total"] / sim[-1]["Accelerator total"]
     capture("RTL simulation | guitar clip", [
-        "Both variants matched all 16,384 ARM output samples.",
-        *format_result(CYCLE_ROWS, sim, 50000, "ms"),
+        "All displayed variants matched all 16,384 ARM output samples.",
+        *format_result(CYCLE_ROWS, sim, 50000, "ms", lanes),
         f"Accelerator speedup under the testbench DDR model: {gain:.2f}x",
-    ], "fir-profiling-rtl.png")
+    ], f"{prefix}-rtl.png")
     if args.evidence:
-        measured = board(args.evidence)
-        speedup = measured[0]["FPGA end-to-end"] / measured[1]["FPGA end-to-end"]
+        measured = board(args.evidence, variants)
+        speedup = measured[0]["FPGA end-to-end"] / measured[-1]["FPGA end-to-end"]
+        arm_summary = []
+        if args.multicore:
+            arm_log = (args.evidence / "arm-bench.log").read_text()
+            for label in ("Single-core median", "Dual-core median"):
+                timing = re.search(r"^" + label + r"\s+(\d+\.\d+) ms", arm_log, re.M).group(1)
+                arm_summary.append(f"ARM {label.lower()}: {timing} ms")
+            capture("DE10-Nano | 15 trials on pinned ARM cores",
+                    arm_log.splitlines(), "arm-dual-board.png")
         capture("DE10-Nano | median of five matching trials per variant", [
-            *format_result(HOST_ROWS, measured, 1, "ms"),
+            *arm_summary,
+            *format_result(HOST_ROWS, measured, 1, "ms", lanes),
             "",
-            *format_result(CYCLE_ROWS, measured, 50000, "ms"),
+            *format_result(CYCLE_ROWS, measured, 50000, "ms", lanes),
             f"FPGA end-to-end speedup: {speedup:.2f}x",
-        ], "fir-profiling-board.png")
+        ], f"{prefix}-board.png")
         for data in measured:
             print(data)
     print(f"RTL accelerator speedup: {gain:.3f}x")

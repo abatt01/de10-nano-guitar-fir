@@ -1,0 +1,20 @@
+Main CPU 0, worker CPU 1
+Trial  1  single   22.965 ms  dual   11.520 ms
+Trial  2  single   23.138 ms  dual   11.476 ms
+Trial  3  single   22.818 ms  dual   11.476 ms
+Trial  4  single   22.845 ms  dual   11.438 ms
+Trial  5  single   22.880 ms  dual   11.520 ms
+Trial  6  single   22.920 ms  dual   11.422 ms
+Trial  7  single   22.839 ms  dual   11.401 ms
+Trial  8  single   22.886 ms  dual   11.443 ms
+Trial  9  single   23.090 ms  dual   11.580 ms
+Trial 10  single   22.818 ms  dual   11.547 ms
+Trial 11  single   22.912 ms  dual   11.481 ms
+Trial 12  single   23.009 ms  dual   11.428 ms
+Trial 13  single   22.941 ms  dual   11.434 ms
+Trial 14  single   22.901 ms  dual   11.444 ms
+Trial 15  single   22.891 ms  dual   11.400 ms
+MATCH all 16384 samples in all 15 trials
+Single-core median 22.901 ms
+Dual-core median   11.444 ms
+ARM speedup        2.001x

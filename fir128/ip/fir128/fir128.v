@@ -15,9 +15,9 @@ module fir128 #(parameter TAPS_PER_CLOCK = 1) (
     output wire irq
 );
     localparam [3:0] IDLE=0, CLEAR=1, READ=2, READ_WAIT=3,
-                     LOAD=4, MAC=5, PACK=6, WRITE=7, WRITE_WAIT=8, MAC_DRAIN=9;
-    localparam [6:0] TAP_STEP = TAPS_PER_CLOCK;
-    localparam [6:0] LAST_TAP = 128 - TAPS_PER_CLOCK;
+                     LOAD=4, MAC=5, PACK=6, WRITE=7, WRITE_WAIT=8, MAC_DRAIN=9, MAC_FINAL=10;
+    localparam [6:0] TAP_STEP = TAPS_PER_CLOCK >= 8 ? TAPS_PER_CLOCK / 2 : TAPS_PER_CLOCK;
+    localparam [6:0] LAST_TAP = (TAPS_PER_CLOCK >= 8 ? 64 : 128) - TAP_STEP;
     localparam [31:0] INPUT_BASE=32'h3f800000, OUTPUT_BASE=32'h3fc00000;
     localparam [31:0] SAMPLE_COUNT=16384, ID_VALUE=32'h46495231;
 
@@ -39,29 +39,42 @@ module fir128 #(parameter TAPS_PER_CLOCK = 1) (
             wire signed [31:0] product = history[history_address] * coefficients[tap];
             assign mac_addend = {{16{product[31]}}, product};
         end else begin : parallel_mac
-            wire signed [31:0] products [0:3];
-            reg signed [31:0] product_regs [0:3];
+            wire signed [35:0] reduction [1:2*TAP_STEP-1];
             genvar index;
-            for (index = 0; index < 4; index = index + 1) begin : channels
+            for (index = 0; index < TAP_STEP; index = index + 1) begin : channels
                 wire [6:0] tap_index = tap + index;
                 wire [6:0] history_address = head - tap_index;
-                assign products[index] = history[history_address] * coefficients[tap_index];
-                always @(posedge clk) begin
-                    if (state == LOAD)
-                        product_regs[index] <= 0;
-                    else if (state == MAC)
-                        product_regs[index] <= products[index];
+                reg signed [32:0] product_reg;
+                if (TAPS_PER_CLOCK >= 8) begin : symmetric
+                    wire [6:0] mirror_address = head - (7'd127 - tap_index);
+                    wire signed [15:0] first = history[history_address];
+                    wire signed [15:0] second = history[mirror_address];
+                    reg signed [16:0] pair_sum;
+                    reg signed [15:0] weight;
+                    always @(posedge clk) begin
+                        if (state == LOAD) begin
+                            pair_sum <= 0;
+                            weight <= 0;
+                            product_reg <= 0;
+                        end else if (state == MAC || state == MAC_DRAIN) begin
+                            pair_sum <= {first[15], first} + {second[15], second};
+                            weight <= coefficients[tap_index];
+                            product_reg <= pair_sum * weight;
+                        end
+                    end
+                end else begin : direct
+                    always @(posedge clk) begin
+                        if (state == LOAD) product_reg <= 0;
+                        else if (state == MAC)
+                            product_reg <= history[history_address] * coefficients[tap_index];
+                    end
                 end
+                assign reduction[TAP_STEP + index] = {{3{product_reg[32]}}, product_reg};
             end
-            // Extend before summing so four full-scale signed products cannot overflow.
-            wire signed [33:0] pair_a =
-                $signed({{2{product_regs[0][31]}}, product_regs[0]}) +
-                $signed({{2{product_regs[1][31]}}, product_regs[1]});
-            wire signed [33:0] pair_b =
-                $signed({{2{product_regs[2][31]}}, product_regs[2]}) +
-                $signed({{2{product_regs[3][31]}}, product_regs[3]});
-            wire signed [33:0] group_sum = pair_a + pair_b;
-            assign mac_addend = {{14{group_sum[33]}}, group_sum};
+            for (index = 1; index < TAP_STEP; index = index + 1) begin : add_tree
+                assign reduction[index] = reduction[2*index] + reduction[2*index + 1];
+            end
+            assign mac_addend = {{12{reduction[1][35]}}, reduction[1]};
         end
     endgenerate
     wire busy = state != IDLE;
@@ -104,7 +117,7 @@ module fir128 #(parameter TAPS_PER_CLOCK = 1) (
             case (state)
                 CLEAR: clear_cycles <= clear_cycles + 1'b1;
                 READ, READ_WAIT: read_cycles <= read_cycles + 1'b1;
-                MAC, MAC_DRAIN: mac_cycles <= mac_cycles + 1'b1;
+                MAC, MAC_DRAIN, MAC_FINAL: mac_cycles <= mac_cycles + 1'b1;
                 WRITE, WRITE_WAIT: write_cycles <= write_cycles + 1'b1;
                 LOAD, PACK: pack_cycles <= pack_cycles + 1'b1;
                 default: ;
@@ -178,6 +191,10 @@ module fir128 #(parameter TAPS_PER_CLOCK = 1) (
                         state <= TAPS_PER_CLOCK == 1 ? PACK : MAC_DRAIN;
                 end
                 MAC_DRAIN: begin
+                    sum <= sum + mac_addend;
+                    state <= TAPS_PER_CLOCK >= 8 ? MAC_FINAL : PACK;
+                end
+                MAC_FINAL: begin
                     sum <= sum + mac_addend;
                     state <= PACK;
                 end
