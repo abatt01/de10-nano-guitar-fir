@@ -9,11 +9,63 @@
 #include <time.h>
 
 #include "reference.h"
+#ifdef __ARM_NEON
+#include <arm_neon.h>
+#endif
 
 enum { TRIALS = 15 };
 static int16_t input[FIR_SAMPLES], single[FIR_SAMPLES], dual[FIR_SAMPLES];
 static sem_t ready, finished;
 static int stop;
+
+#ifdef __ARM_NEON
+static int use_neon;
+static int16_t padded[FIR_SAMPLES + FIR_TAPS - 1], neon_output[FIR_SAMPLES];
+static const int16_t neon_coefficients[FIR_TAPS] = {
+#include "coeff.inc"
+};
+
+static void neon_range(size_t begin, size_t end)
+{
+    for (size_t index = begin; index < end; index += 4) {
+        const int16_t *samples = padded + index + FIR_TAPS - 1;
+        int32x4_t first = vdupq_n_s32(0), second = first;
+        for (size_t tap = 0; tap < FIR_TAPS / 2; ++tap) {
+            first = vmlal_n_s16(first, vld1_s16(samples - tap), neon_coefficients[tap]);
+            second = vmlal_n_s16(second, vld1_s16(samples - tap - FIR_TAPS / 2),
+                                neon_coefficients[tap + FIR_TAPS / 2]);
+        }
+        // A sum beyond int32 already saturates at Q15 output precision.
+        int32_t sums[4];
+        vst1q_s32(sums, vqaddq_s32(first, second));
+        for (unsigned lane = 0; lane < 4; ++lane)
+            neon_output[index + lane] = fir_quantize(sums[lane]);
+    }
+}
+
+static int neon_safe(void)
+{
+    for (unsigned half = 0; half < 2; ++half) {
+        int64_t bound = 0;
+        for (unsigned tap = 0; tap < FIR_TAPS / 2; ++tap)
+            bound += (int64_t)abs(neon_coefficients[half * (FIR_TAPS / 2) + tap]) * 32768;
+        if (bound > INT32_MAX)
+            return 0;
+    }
+    return 1;
+}
+#endif
+
+static void run_half(size_t begin, size_t end)
+{
+#ifdef __ARM_NEON
+    if (use_neon) {
+        neon_range(begin, end);
+        return;
+    }
+#endif
+    fir_range(input, dual, begin, end);
+}
 
 static void check(int error, const char *operation)
 {
@@ -44,7 +96,7 @@ static void *worker(void *unused)
         wait_for(&ready);
         if (stop)
             return NULL;
-        fir_range(input, dual, FIR_SAMPLES / 2, FIR_SAMPLES);
+        run_half(FIR_SAMPLES / 2, FIR_SAMPLES);
         signal_to(&finished);
     }
 }
@@ -61,8 +113,13 @@ static double run(int parallel)
 {
     double start = now_ms();
     if (parallel) {
+#ifdef __ARM_NEON
+        use_neon = parallel == 2;
+        if (use_neon)
+            memcpy(padded + FIR_TAPS - 1, input, sizeof(input));
+#endif
         signal_to(&ready);
-        fir_range(input, dual, 0, FIR_SAMPLES / 2);
+        run_half(0, FIR_SAMPLES / 2);
         wait_for(&finished);
     } else {
         fir_reference(input, single, FIR_SAMPLES);
@@ -121,32 +178,56 @@ int main(int argc, char **argv)
     printf("Main CPU %d, worker CPU %d\n", cpus[0], cpus[1]);
     run(0);
     run(1);
-    double one[TRIALS], two[TRIALS];
-    for (int trial = 0; trial < TRIALS; ++trial) {
-        if (trial % 2) {
-            two[trial] = run(1);
-            one[trial] = run(0);
-        } else {
-            one[trial] = run(0);
-            two[trial] = run(1);
+#ifdef __ARM_NEON
+    if (!neon_safe()) {
+        fputs("NEON accumulation bounds exceeded for these coefficients\n", stderr);
+        return 1;
+    }
+    enum { MODES = 3 };
+    run(2);
+#else
+    enum { MODES = 2 };
+#endif
+    double timings[MODES][TRIALS];
+    for (unsigned trial = 0; trial < TRIALS; ++trial) {
+        for (unsigned offset = 0; offset < MODES; ++offset) {
+            unsigned mode = (trial + offset) % MODES;
+            timings[mode][trial] = run(mode);
         }
         if (memcmp(single, dual, sizeof(single))) {
             fputs("ARM output mismatch\n", stderr);
             return 1;
         }
-        printf("Trial %2d  single %8.3f ms  dual %8.3f ms\n",
-               trial + 1, one[trial], two[trial]);
+#ifdef __ARM_NEON
+        if (memcmp(single, neon_output, sizeof(single))) {
+            fputs("NEON output mismatch\n", stderr);
+            return 1;
+        }
+#endif
+        printf("Trial %2u  single %8.3f ms  dual %8.3f ms",
+               trial + 1, timings[0][trial], timings[1][trial]);
+#ifdef __ARM_NEON
+        printf("  dual NEON %8.3f ms", timings[2][trial]);
+#endif
+        putchar('\n');
     }
     stop = 1;
     signal_to(&ready);
     check(pthread_join(thread, NULL), "pthread_join");
     sem_destroy(&ready);
     sem_destroy(&finished);
-    qsort(one, TRIALS, sizeof(*one), compare_time);
-    qsort(two, TRIALS, sizeof(*two), compare_time);
+    for (unsigned mode = 0; mode < MODES; ++mode)
+        qsort(timings[mode], TRIALS, sizeof(double), compare_time);
+    double single_median = timings[0][TRIALS / 2];
+    double dual_median = timings[1][TRIALS / 2];
     printf("MATCH all %d samples in all %d trials\n", FIR_SAMPLES, TRIALS);
-    printf("Single-core median %.3f ms\n", one[TRIALS / 2]);
-    printf("Dual-core median   %.3f ms\n", two[TRIALS / 2]);
-    printf("ARM speedup        %.3fx\n", one[TRIALS / 2] / two[TRIALS / 2]);
+    printf("Single-core median %.3f ms\n", single_median);
+    printf("Dual-core median   %.3f ms\n", dual_median);
+    printf("ARM speedup        %.3fx\n", single_median / dual_median);
+#ifdef __ARM_NEON
+    double neon_median = timings[2][TRIALS / 2];
+    printf("Dual NEON median   %.3f ms\n", neon_median);
+    printf("NEON over dual C   %.3fx\n", dual_median / neon_median);
+#endif
     return 0;
 }

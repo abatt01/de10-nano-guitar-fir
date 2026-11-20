@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-module fir128_tb #(parameter TAPS_PER_CLOCK = 1);
+module fir128_tb #(parameter TAPS_PER_CLOCK = 1, parameter BUFFER_DDR = 0, parameter DDR_DELAY = 6);
     reg clk = 0;
     always #10 clk = ~clk;
     reg reset = 1;
@@ -16,7 +16,7 @@ module fir128_tb #(parameter TAPS_PER_CLOCK = 1);
     integer reads = 0, writes = 0, retired = 0;
     integer cycle = 0, delay_count = 0, k;
     integer read_clocks = 0, write_clocks = 0, start_cycle, elapsed;
-    reg [31:0] clear_count, read_count, mac_count, write_count, pack_count, lanes;
+    reg [31:0] clear_count, read_count, mac_count, write_count, pack_count, lanes, total;
     reg response_is_write = 0;
     wire wait_request = (cycle % 7) < 4;
     reg stalled = 0;
@@ -24,7 +24,7 @@ module fir128_tb #(parameter TAPS_PER_CLOCK = 1);
     reg [63:0] stalled_data;
     reg stalled_write;
 
-    fir128 #(.TAPS_PER_CLOCK(TAPS_PER_CLOCK)) dut (
+    fir128 #(.TAPS_PER_CLOCK(TAPS_PER_CLOCK), .BUFFER_DDR(BUFFER_DDR)) dut (
         .clk(clk), .reset(reset), .avs_address(csr_address), .avs_read(1'b1),
         .avs_write(csr_write), .avs_writedata(csr_wdata), .avs_readdata(csr_rdata),
         .avm_address(address), .avm_burstcount(burstcount), .avm_read(rd),
@@ -52,17 +52,17 @@ module fir128_tb #(parameter TAPS_PER_CLOCK = 1);
             stalled_data <= write_data;
             if ((rd || wr) && !wait_request) begin
                 if (burstcount != 1 || delay_count != 0) $fatal(1, "Unexpected command");
-                delay_count <= 6;
+                delay_count <= DDR_DELAY;
                 response_is_write <= wr;
                 if (rd) begin
-                    if (reads != retired || reads >= 4096 ||
+                    if ((!BUFFER_DDR && reads != retired) || reads >= 4096 ||
                         address !== 32'h3f800000 + 8 * reads)
                         $fatal(1, "Read address/order %h at beat %d", address, reads);
                     for (k = 0; k < 4; k = k + 1)
                         read_data[16*k +: 16] <= input_pcm[4*reads + k];
                     reads <= reads + 1;
                 end else begin
-                    if (writes + 1 != reads || writes >= 4096 ||
+                    if ((!BUFFER_DDR && writes + 1 != reads) || writes >= reads || writes >= 4096 ||
                         address !== 32'h3fc00000 + 8 * writes)
                         $fatal(1, "Write address/order %h at beat %d", address, writes);
                     for (k = 0; k < 4; k = k + 1)
@@ -136,13 +136,17 @@ module fir128_tb #(parameter TAPS_PER_CLOCK = 1);
         read_csr(13, write_count);
         read_csr(14, pack_count);
         read_csr(15, lanes);
-        if (lanes != TAPS_PER_CLOCK || clear_count != 128 ||
+        read_csr(4, total);
+        if (lanes != (TAPS_PER_CLOCK | (BUFFER_DDR ? 256 : 0)) || clear_count != 128 ||
             mac_count != 16384 * (128 / TAPS_PER_CLOCK + (TAPS_PER_CLOCK >= 8 ? 2 : TAPS_PER_CLOCK == 4 ? 1 : 0)) ||
             pack_count != 32768 || read_count != read_clocks || write_count != write_clocks ||
-            clear_count + read_count + mac_count + write_count + pack_count != elapsed)
+            total != elapsed ||
+            (!BUFFER_DDR && clear_count + read_count + mac_count + write_count + pack_count != elapsed) ||
+            (BUFFER_DDR && clear_count + read_count + mac_count + write_count + pack_count <= elapsed))
             $fatal(1, "Counters do not match bus and job observations");
         $display("RTL PASS: all 16384 samples, DDR bounds/order, backpressure, IRQ and counters");
-        $display("Taps per clock     %0d", lanes);
+        $display("Taps per clock     %0d", TAPS_PER_CLOCK);
+        $display("Buffered DDR       %0d", BUFFER_DDR);
         $display("Clear history      %0d cycles", clear_count);
         $display("DDR read and wait  %0d cycles", read_count);
         $display("MAC and drain      %0d cycles", mac_count);

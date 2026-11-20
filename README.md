@@ -22,3 +22,5 @@ generated guitar-style clip. The ARM took **22.968 ms** and the FPGA path took
 [FPGA profiling and four-tap results](docs/fir-profiling.md)
 
 [Dual-core ARM and wider FPGA benchmarks](docs/fir-multicore.md)
+
+[NEON ARM and buffered FPGA evaluation](docs/fir-buffered.md)

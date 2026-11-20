@@ -273,3 +273,26 @@ FPGA images. The eight- and sixteen-tap modes require mirrored coefficients.
 The paired run measures the pinned dual-core ARM implementation, then five
 trials for each FPGA image. It keeps and checks the PCM outputs, saves all
 timing logs, and requests a reboot to restore the stock image.
+
+## Dual-core NEON and DDR buffering
+
+On the DE10-Nano, use the native compiler to enable the NEON benchmark path.
+
+```sh
+gcc -std=c11 -O2 -Wall -Wextra -Werror -pthread -mcpu=cortex-a9 -mfpu=neon arm_bench.c -o arm_bench
+./arm_bench input.s16le
+```
+
+To compare the original and buffered 16-tap FPGA paths, build the images and
+use the stock-board profiling procedure.
+
+```sh
+./build.sh fir128-wide
+./build.sh fir128-buffered
+./profile-board.sh "$TARGET" build/guitar/input.s16le buffered
+```
+
+The buffered image reports overlapping DDR and compute counters. Read its
+accelerator elapsed counter at offset `0x10`; a write to that same register
+still starts the accelerator. Bit 8 of the mode register at `0x3c` identifies
+an image with buffered DDR.

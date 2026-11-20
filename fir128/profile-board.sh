@@ -2,12 +2,13 @@
 # Run from the host after checking the stock FFT baseline and disconnecting JTAG.
 set -euo pipefail
 if (( $# < 2 || $# > 3 )); then
-    echo 'Usage: profile-board.sh user@board input.s16le [symmetric]' >&2
+    echo 'Usage: profile-board.sh user@board input.s16le [symmetric|buffered]' >&2
     exit 2
 fi
 case "${3:-}" in
     '') variants=(serial parallel) ;;
     symmetric) variants=(parallel symmetric wide) ;;
+    buffered) variants=(wide buffered) ;;
     *) echo 'Unknown comparison mode' >&2; exit 2 ;;
 esac
 target=$1
@@ -68,8 +69,8 @@ sha256sum /media/FAT/de10-nano.rbf /lib/firmware/de10-nano.dtbo > evidence/stock
 cat /proc/sys/kernel/random/boot_id > evidence/boot-before
 sha256sum -c payload.sha256
 gcc -O2 -Wall -Wextra -Werror -std=c11 fir128_test.c -o fir128_test
-if [ "$#" -eq 3 ]; then
-    gcc -O2 -Wall -Wextra -Werror -std=c11 -pthread arm_bench.c -o arm_bench
+if [ "$1" != serial ]; then
+    gcc -O2 -Wall -Wextra -Werror -std=c11 -pthread -mcpu=cortex-a9 -mfpu=neon arm_bench.c -o arm_bench
 fi
 gcc -O2 -Wall -Wextra -D_FILE_OFFSET_BITS=64 fpga_irqs_off.c -o fpga_irqs_off
 for artifact in ./*.rbf ./*.dtbo; do
@@ -90,7 +91,7 @@ for driver in leds-gpio gpio-keys; do
 done
 rmdir "$ov/de10-nano.dtbo"
 ./fpga_irqs_off
-if [ "$#" -eq 3 ]; then
+if [ "$1" != serial ]; then
     if ! ./arm_bench input.s16le > evidence/arm-bench.log 2>&1; then
         cat evidence/arm-bench.log
         exit 1
@@ -99,7 +100,7 @@ if [ "$#" -eq 3 ]; then
 fi
 
 for variant in "$@"; do
-    case "$variant" in serial) lanes=1 ;; parallel) lanes=4 ;; symmetric) lanes=8 ;; wide) lanes=16 ;; esac
+    case "$variant" in serial) lanes=1 ;; parallel) lanes=4 ;; symmetric) lanes=8 ;; wide|buffered) lanes=16 ;; esac
     slot="fir128-$variant"
     mkdir "$ov/$slot"
     printf '%s' "$slot.dtbo" > "$ov/$slot/path"
@@ -115,6 +116,9 @@ for variant in "$@"; do
             exit 1
         fi
         grep -F "($lanes taps per clock)" "$log"
+        if [ "$variant" = buffered ]; then
+            grep -Fx 'DDR transfers overlap compute' "$log"
+        fi
         cat "$log"
     done
     cat /proc/interrupts > "evidence/irq-$variant.log"

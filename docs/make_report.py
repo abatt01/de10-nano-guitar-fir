@@ -171,6 +171,22 @@ def make_pdf(output, terminal_path, waveform_path):
         add("Eight and sixteen effective taps per clock use four and eight multipliers, "
             "respectively. Each uses a signed 17-bit sum of mirrored history samples. "
             "Both pipeline stages drain before the final sample is rounded.")
+    buffered = DOCS / "fir-buffered-rtl.png"
+    if buffered.is_file():
+        story.append(PageBreak())
+        add("NEON and buffered DDR", "Title")
+        add("The dual-core ARM NEON kernel computes four adjacent outputs at once. "
+            "It matched the scalar reference on the guitar and full-scale stress inputs "
+            "under Cortex-A9 emulation. Emulation timing is excluded.")
+        figure(buffered)
+        add("The FPGA uses separate one-beat input and output buffers to overlap DDR "
+            "transactions with arithmetic while waiting for the last write response "
+            "before raising the interrupt.")
+        live = DOCS / "fir-buffered-board.png"
+        if live.is_file():
+            story.append(PageBreak())
+            add("Live NEON and buffered FPGA comparison", "Title")
+            figure(live)
     SimpleDocTemplate(str(output), title="DE10-Nano guitar FIR processing",
                       leftMargin=60, rightMargin=60).build(story)
 

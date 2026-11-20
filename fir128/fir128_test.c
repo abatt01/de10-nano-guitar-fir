@@ -272,7 +272,8 @@ int main(int argc, char **argv)
     printf("  Configure registers      %8.3f ms\n", configured - staged);
     printf("  Start to IRQ and status  %8.3f ms\n", completed - configured);
     printf("  Copy output              %8.3f ms\n", copied - completed);
-    uint32_t taps_per_clock = csr[REG_TAPS_PER_CLOCK];
+    uint32_t profile = csr[REG_TAPS_PER_CLOCK];
+    uint32_t taps_per_clock = profile & 0xff;
     if (taps_per_clock == 1 || taps_per_clock == 4 || taps_per_clock == 8 || taps_per_clock == 16) {
         uint32_t clear = csr[REG_CLEAR_CYCLES];
         uint32_t read = csr[REG_READ_CYCLES];
@@ -285,7 +286,12 @@ int main(int argc, char **argv)
         print_cycles("MAC and pipeline drain", mac);
         print_cycles("Load and pack", pack);
         print_cycles("DDR write and wait", write);
-        print_cycles("Accelerator total", clear + read + mac + pack + write);
+        if (profile & 0x100) {
+            puts("DDR transfers overlap compute");
+            print_cycles("Accelerator total", csr[REG_CTRL]);
+        } else {
+            print_cycles("Accelerator total", clear + read + mac + pack + write);
+        }
     }
     result = 0;
     if (argc == 4) {

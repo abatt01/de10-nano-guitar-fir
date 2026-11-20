@@ -6,11 +6,11 @@ vendor=${GHRD_DIR:-../cd/Demonstrations/SoC_FPGA/DE10_NANO_SoC_GHRD}
 image=${1:-fir128}
 case "$image" in
     fir128) build=$PWD/build; component=ip/fir128; overlay=fir128.dts ;;
-    fir128-serial|fir128-parallel|fir128-symmetric|fir128-wide)
+    fir128-serial|fir128-parallel|fir128-symmetric|fir128-wide|fir128-buffered)
         build=$PWD/build/$image
         image=fir128; component=ip/fir128; overlay=fir128.dts ;;
     array_sum) build=$PWD/build/array_sum; component=../ghrd/ip/array_sum; overlay=../sw/array_sum.dts ;;
-    *) echo 'Usage: build.sh [fir128|fir128-serial|fir128-parallel|fir128-symmetric|fir128-wide|array_sum]' >&2; exit 2 ;;
+    *) echo 'Usage: build.sh [fir128|fir128-serial|fir128-parallel|fir128-symmetric|fir128-wide|fir128-buffered|array_sum]' >&2; exit 2 ;;
 esac
 mkdir -p "$build/ip/$image"
 cp "$vendor"/{DE10_NANO_SoC_GHRD.qpf,DE10_NANO_SoC_GHRD.qsf,DE10_NANO_SoC_GHRD.v,DE10_NANO_SOC_GHRD.sdc} "$build/"
@@ -19,7 +19,7 @@ cp "$component"/* "$build/ip/$image/"
 case "${1:-}" in
     fir128-parallel) lanes=4 ;;
     fir128-symmetric) lanes=8 ;;
-    fir128-wide) lanes=16 ;;
+    fir128-wide|fir128-buffered) lanes=16 ;;
     *) lanes=1 ;;
 esac
 if (( lanes >= 8 )); then
@@ -32,6 +32,9 @@ PYTHON
 fi
 if (( lanes != 1 )); then
     sed -i "s/parameter TAPS_PER_CLOCK = 1/parameter TAPS_PER_CLOCK = $lanes/" "$build/ip/fir128/fir128.v"
+fi
+if [[ ${1:-} == fir128-buffered ]]; then
+    sed -i 's/parameter BUFFER_DDR = 0/parameter BUFFER_DDR = 1/' "$build/ip/fir128/fir128.v"
 fi
 # Normalize the System CD's line endings before applying the 22.1 migration.
 tr -d '\r' < "$vendor/soc_system.qsys" > "$build/soc_system.qsys"

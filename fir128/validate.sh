@@ -29,3 +29,8 @@ for lanes in 1 4 8 16; do
         -o build/fir128_tb ip/fir128/fir128.v fir128_tb.sv
     vvp build/fir128_tb
 done
+for delay in 6 61; do
+    iverilog -g2012 -s fir128_tb -P fir128_tb.TAPS_PER_CLOCK=16 -P fir128_tb.BUFFER_DDR=1 \
+        -P "fir128_tb.DDR_DELAY=$delay" -o build/fir128_tb ip/fir128/fir128.v fir128_tb.sv
+    vvp build/fir128_tb
+done

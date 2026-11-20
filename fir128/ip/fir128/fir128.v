@@ -1,4 +1,4 @@
-module fir128 #(parameter TAPS_PER_CLOCK = 1) (
+module fir128 #(parameter TAPS_PER_CLOCK = 1, parameter BUFFER_DDR = 0) (
     input wire clk, reset,
     input wire [3:0] avs_address,
     input wire avs_read, avs_write,
@@ -97,28 +97,89 @@ module fir128 #(parameter TAPS_PER_CLOCK = 1) (
     endfunction
 
     assign irq = irq_mask & edge_cap;
-    assign avm_read = state == READ;
-    assign avm_write = state == WRITE;
-    assign avm_address = (avm_write ? output_base : input_base) + {17'd0, beat, 3'b0};
-    assign avm_writedata = output_word;
     assign avm_burstcount = 5'd1;
 
     wire start = state == IDLE && avs_write && avs_address == 4'd4 && avs_writedata[0];
+    localparam [2:0] BUS_IDLE=0, BUS_READ=1, BUS_RWAIT=2, BUS_WRITE=3, BUS_WWAIT=4;
+    reg [2:0] bus_state;
+    reg [12:0] reads_complete, writes_complete;
+    reg input_ready, output_pending;
+    reg [63:0] input_buffer, output_buffer;
+    wire read_active = bus_state == BUS_READ || bus_state == BUS_RWAIT;
+    wire write_active = bus_state == BUS_WRITE || bus_state == BUS_WWAIT;
+    wire bus_fault = (read_active && avm_readdatavalid ||
+                      write_active && avm_writeresponsevalid) && avm_response != 0;
 
-    // Count all busy clocks by state, including cycles waiting for a bus response.
+    assign avm_read = BUFFER_DDR ? bus_state == BUS_READ : state == READ;
+    assign avm_write = BUFFER_DDR ? bus_state == BUS_WRITE : state == WRITE;
+    assign avm_address = BUFFER_DDR ?
+        (write_active ? output_base + {16'd0, writes_complete, 3'b0} :
+                        input_base + {16'd0, reads_complete, 3'b0}) :
+        (avm_write ? output_base : input_base) + {17'd0, beat, 3'b0};
+    assign avm_writedata = BUFFER_DDR ? output_buffer : output_word;
+
+    // Single outstanding transaction, with read-ahead and write-behind mailboxes.
+    always @(posedge clk) begin
+        if (reset || start || !busy) begin
+            bus_state <= BUS_IDLE;
+            reads_complete <= 0;
+            writes_complete <= 0;
+            input_ready <= 0;
+            output_pending <= 0;
+        end else if (BUFFER_DDR) begin
+            if (state == READ && input_ready) input_ready <= 0;
+            if (state == WRITE && !output_pending) begin
+                output_pending <= 1;
+                output_buffer <= output_word;
+            end
+            case (bus_state)
+                BUS_IDLE: begin
+                    if (output_pending)
+                        bus_state <= BUS_WRITE;
+                    else if (!input_ready && reads_complete < 4096)
+                        bus_state <= BUS_READ;
+                end
+                BUS_READ, BUS_RWAIT: begin
+                    if (bus_state == BUS_READ && !avm_waitrequest) bus_state <= BUS_RWAIT;
+                    if (avm_readdatavalid) begin
+                        input_ready <= 1;
+                        input_buffer <= avm_readdata;
+                        reads_complete <= reads_complete + 1'b1;
+                        bus_state <= BUS_IDLE;
+                    end
+                end
+                BUS_WRITE, BUS_WWAIT: begin
+                    if (bus_state == BUS_WRITE && !avm_waitrequest) bus_state <= BUS_WWAIT;
+                    if (avm_writeresponsevalid) begin
+                        output_pending <= 0;
+                        writes_complete <= writes_complete + 1'b1;
+                        bus_state <= BUS_IDLE;
+                    end
+                end
+                default: bus_state <= BUS_IDLE;
+            endcase
+        end
+    end
+
+    reg [31:0] total_cycles;
+    // Bus counters overlap the compute counters in buffered mode.
     always @(posedge clk) begin
         if (reset || start) begin
+            total_cycles <= 0;
             clear_cycles <= 0;
             read_cycles <= 0;
             mac_cycles <= 0;
             write_cycles <= 0;
             pack_cycles <= 0;
         end else begin
+            if (busy) total_cycles <= total_cycles + 1'b1;
+            if (BUFFER_DDR && read_active) read_cycles <= read_cycles + 1'b1;
+            if (BUFFER_DDR && write_active) write_cycles <= write_cycles + 1'b1;
             case (state)
                 CLEAR: clear_cycles <= clear_cycles + 1'b1;
-                READ, READ_WAIT: read_cycles <= read_cycles + 1'b1;
+                READ, READ_WAIT: if (!BUFFER_DDR) read_cycles <= read_cycles + 1'b1;
                 MAC, MAC_DRAIN, MAC_FINAL: mac_cycles <= mac_cycles + 1'b1;
-                WRITE, WRITE_WAIT: write_cycles <= write_cycles + 1'b1;
+                WRITE, WRITE_WAIT: if (!BUFFER_DDR) write_cycles <= write_cycles + 1'b1;
                 LOAD, PACK: pack_cycles <= pack_cycles + 1'b1;
                 default: ;
             endcase
@@ -146,7 +207,11 @@ module fir128 #(parameter TAPS_PER_CLOCK = 1) (
                     default: ;
                 endcase
             end
-            case (state)
+            if (BUFFER_DDR && busy && bus_fault) begin
+                state <= IDLE;
+                fault <= 1;
+                edge_cap <= 1;
+            end else case (state)
                 IDLE: if (start) begin
                     done <= 0;
                     fault <= !valid_config;
@@ -164,7 +229,12 @@ module fir128 #(parameter TAPS_PER_CLOCK = 1) (
                     tap <= tap + 1'b1;
                     if (tap == 127) state <= READ;
                 end
-                READ, READ_WAIT: begin
+                READ, READ_WAIT: if (BUFFER_DDR) begin
+                    if (input_ready) begin
+                        input_word <= input_buffer;
+                        state <= LOAD;
+                    end
+                end else begin
                     if (state == READ && !avm_waitrequest) state <= READ_WAIT;
                     if (avm_readdatavalid) begin
                         if (avm_response != 0) begin
@@ -204,7 +274,21 @@ module fir128 #(parameter TAPS_PER_CLOCK = 1) (
                     lane <= lane + 1'b1;
                     state <= lane == 3 ? WRITE : LOAD;
                 end
-                WRITE, WRITE_WAIT: begin
+                WRITE, WRITE_WAIT: if (BUFFER_DDR) begin
+                    if (state == WRITE && !output_pending) begin
+                        if (beat == 4095)
+                            state <= WRITE_WAIT;
+                        else begin
+                            beat <= beat + 1'b1;
+                            state <= READ;
+                        end
+                    end
+                    if (writes_complete == 4096) begin
+                        state <= IDLE;
+                        done <= 1;
+                        edge_cap <= 1;
+                    end
+                end else begin
                     if (state == WRITE && !avm_waitrequest) state <= WRITE_WAIT;
                     // Retire each write on the downstream response, not command acceptance.
                     if (avm_writeresponsevalid) begin
@@ -229,6 +313,7 @@ module fir128 #(parameter TAPS_PER_CLOCK = 1) (
             4'd0: avs_readdata = {31'd0, done};
             4'd2: avs_readdata = {31'd0, irq_mask};
             4'd3: avs_readdata = {31'd0, edge_cap};
+            4'd4: avs_readdata = total_cycles;
             4'd5: avs_readdata = {29'd0, fault, done, busy};
             4'd6: avs_readdata = input_base;
             4'd7: avs_readdata = count;
@@ -239,7 +324,7 @@ module fir128 #(parameter TAPS_PER_CLOCK = 1) (
             4'd12: avs_readdata = mac_cycles;
             4'd13: avs_readdata = write_cycles;
             4'd14: avs_readdata = pack_cycles;
-            4'd15: avs_readdata = TAPS_PER_CLOCK;
+            4'd15: avs_readdata = TAPS_PER_CLOCK | (BUFFER_DDR ? 32'h100 : 0);
             default: avs_readdata = 0;
         endcase
     end
