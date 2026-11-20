@@ -51,3 +51,30 @@ The minimum setup and hold slacks were +4.066 ns and +0.121 ns. The fitted
 design used 12,744 of 41,910 ALMs, 8 of 112 DSP blocks, and 6 of 553 RAM
 blocks. The generated firmware and overlay passed checksum verification.
 The buffered firmware was not loaded because USB Ethernet remained unreachable.
+
+## Measured on the DE10-Nano after restart
+
+All 15 pinned ARM trials and all five FPGA trials per image matched the
+16,384-sample reference bit-for-bit. Each timing below is a median.
+
+| Implementation | Time |
+| --- | ---: |
+| ARM scalar, one core | 26.865 ms |
+| ARM scalar, two cores | 13.439 ms |
+| **ARM NEON, two cores** | **2.006 ms** |
+| FPGA 16 taps/clock, unbuffered, end to end | 9.328 ms |
+| FPGA 16 taps/clock, buffered, end to end | 7.318 ms |
+
+NEON was **6.70× as fast** as the dual-core scalar path built into the same
+benchmark and **3.65× as fast** as the buffered FPGA path end to end. The
+FPGA runner's separate single-core reference uses its original compiler
+flags. Use the pinned ARM benchmark rows for the within-binary NEON
+comparison.
+
+Buffering reduced FPGA end-to-end latency by **21.5%**. The accelerator
+itself dropped from **6.098 ms to 4.099 ms**, while its 3.277 ms arithmetic
+and approximately 3.17 ms of host copies stayed essentially unchanged.
+
+![Live ARM and FPGA timings](fir-buffered-board.png)
+
+[ARM NEON trials](arm-neon-board.png) · [All board logs](fir-buffered-board-trials.txt)
